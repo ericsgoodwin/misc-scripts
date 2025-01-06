@@ -1,6 +1,8 @@
 import arcpy
+import arcpy.management
 import pandas as pd
 import math
+import os
 
 
 def get_bbox(fc, feature_index=None):
@@ -77,13 +79,23 @@ def scale_fc(input_fc, output_fc, scale_factor):
     Returns feature class with each feature scaled to scale %
 
     Args:
-        input_fc:
-        output_fc:
-        scale_factor:
+        input_fc: The path to the existing polygon feature class whose features will be scaled in a new/empty feature class.
+        output_fc: The path to the empty or not-yet-existent polygon feature class which will house the scaled polygons.
+        scale_factor: A number between 0 and 1 which will be used to scale the features by %
     
     Returns:
-    
+        The output_fc polygon feature class (if a variable is set to be returned)
     """
+    out_gdb, out_name = os.path.split(output_fc)
+    
+    if not arcpy.Exists(output_fc):
+        spatial_ref = arcpy.Describe(input_fc).spatialReference
+        
+        arcpy.management.CreateFeatureclass(out_path=out_gdb,
+                                            out_name=out_name,
+                                            geometry_type="POLYGON",
+                                            spatial_reference=spatial_ref)
+
     with arcpy.da.SearchCursor(input_fc, ["SHAPE@"]) as search_cursor, \
     arcpy.da.InsertCursor(output_fc, ["SHAPE@"]) as insert_cursor:
         for row in search_cursor:
