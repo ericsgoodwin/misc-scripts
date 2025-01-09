@@ -80,27 +80,41 @@ def scale_fc(input_fc, output_fc, scale_factor):
 
     Args:
         input_fc: The path to the existing polygon feature class whose features will be scaled in a new/empty feature class.
-        output_fc: The path to the empty or not-yet-existent polygon feature class which will house the scaled polygons.
+        output_fc: The path to the not-yet-existent polygon feature class which will house the scaled polygons.
         scale_factor: A number between 0 and 1 which will be used to scale the features by %
     
     Returns:
         The output_fc polygon feature class (if a variable is set to be returned)
     """
-    out_gdb, out_name = os.path.split(output_fc)
-    
-    if not arcpy.Exists(output_fc):
-        spatial_ref = arcpy.Describe(input_fc).spatialReference
-        
-        arcpy.management.CreateFeatureclass(out_path=out_gdb,
-                                            out_name=out_name,
-                                            geometry_type="POLYGON",
-                                            spatial_reference=spatial_ref)
+    # Get the fields to include in the output
+    fields = arcpy.ListFields(input_fc)
+    field_names = [field.name for field in fields if field.type not in ("OID", "Geometry") and not field.required]
 
-    with arcpy.da.SearchCursor(input_fc, ["SHAPE@"]) as search_cursor, \
-    arcpy.da.InsertCursor(output_fc, ["SHAPE@"]) as insert_cursor:
+    out_gdb, out_name = os.path.split(output_fc)
+    spatial_ref = arcpy.Describe(input_fc).spatialReference
+        
+    arcpy.management.CreateFeatureclass(out_path=out_gdb,
+                                        out_name=out_name,
+                                        geometry_type="POLYGON",
+                                        spatial_reference=spatial_ref)
+
+
+    # Add fields from input_fc to output_fc
+    for field in fields:
+        if field.name in field_names:
+            arcpy.AddField_management(output_fc, field.name, field.type, 
+                                        field.precision, field.scale, field.length)
+
+    # Prepare field mapping for cursor use
+    input_fields = ["SHAPE@"] + field_names
+    output_fields = ["SHAPE@"] + field_names
+
+    
+    with arcpy.da.SearchCursor(input_fc, input_fields) as search_cursor, \
+    arcpy.da.InsertCursor(output_fc, output_fields) as insert_cursor:
         for row in search_cursor:
             scaled_geom = scale_geom(row[0], scale_factor)
-            insert_cursor.insertRow([scaled_geom])
+            insert_cursor.insertRow([scaled_geom] + list(row[1:]))
             
 
 def table_to_data_frame(in_table, input_fields=None, where_clause=None):
